@@ -1,0 +1,33 @@
+applications:
+  - name: secure-app
+    path: .
+    memory: 256M
+    buildpacks:
+      - nodejs_buildpack
+    services:
+      - xsuaa
+    routes:
+      - route: secure-app-backend.cfapps.eu10-004.hana.ondemand.com
+    env:
+      NODE_ENV: production
+
+  - name: secure-app-router
+    path: approuter
+    memory: 128M
+    buildpacks:
+      - nodejs_buildpack
+    services:
+      - xsuaa
+    routes:
+      - route: secure-app.cfapps.eu10-004.hana.ondemand.com
+    env:
+      NODE_ENV: production
+      TENANT_HOST_PATTERN: "^(.*).cfapps.eu10-004.hana.ondemand.com"
+      destinations: >
+        [
+          {
+            "name": "srv-api",
+            "url": "https://secure-app-backend.cfapps.eu10-004.hana.ondemand.com",
+            "forwardAuthToken": true
+          }
+        ]
