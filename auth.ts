@@ -28,61 +28,85 @@ export const config = {
       id: "xsuaa",
       name: "XSUAA",
       type: "oauth",
-      wellKnown: null,
+      issuer: "https://coe-asset-b9jxgzf0.authentication.eu10.hana.ondemand.com/oauth/token",
+      allowDangerousEmailAccountLinking: false,
       authorization: {
-        url: `${process.env.NEXT_PUBLIC_SAP_BTP_URL}/oauth/authorize`,
+        url: "https://coe-asset-b9jxgzf0.authentication.eu10.hana.ondemand.com/oauth/authorize",
         params: {
           scope: "openid",
           response_type: "code",
         },
       },
       token: {
-        url: `${process.env.NEXT_PUBLIC_SAP_BTP_URL}/oauth/token`,
-        params: { grant_type: "authorization_code" },
-        async request({ provider, params, client }) {
-          const credentials = Buffer.from(
-            `${client.client_id}:${client.client_secret}`
-          ).toString("base64")
-
-          console.log("[DEBUG] Making token request:", {
-            url: provider.token?.url,
-            code_length: params.code?.length,
+        url: "https://coe-asset-b9jxgzf0.authentication.eu10.hana.ondemand.com/oauth/token",
+        async request({ provider, params }) {
+          console.log("[DEBUG] Token Exchange - Starting with params:", {
+            code: params.code ? `${params.code.substring(0, 10)}...` : 'no code',
             redirect_uri: params.redirect_uri,
           })
 
-          const response = await fetch(provider.token.url!, {
+          const tokenRequest = {
             method: "POST",
             headers: {
               "Content-Type": "application/x-www-form-urlencoded",
-              Authorization: `Basic ${credentials}`,
             },
             body: new URLSearchParams({
               grant_type: "authorization_code",
               code: params.code,
               redirect_uri: params.redirect_uri,
-              client_id: client.client_id,
+              client_id: "sb-secure-app!t501469",
+              client_secret: "7d1b1323-bb64-47d6-a0e9-4eda8d2a653b$Nqy7MV29Cp-n0ibGC6v67qMZGMQmJa9sLse05_0zxrQ=",
             }),
-          })
-
-          const responseText = await response.text()
-          console.log("[DEBUG] Token response:", {
-            status: response.status,
-            statusText: response.statusText,
-            headers: Object.fromEntries(response.headers),
-            body: responseText,
-          })
-
-          if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`)
           }
 
-          const tokens = JSON.parse(responseText)
-          return { tokens }
+          console.log("[DEBUG] Token Exchange - Request details:", {
+            url: provider.token?.url,
+            method: tokenRequest.method,
+            headers: Object.keys(tokenRequest.headers),
+            bodyParams: Array.from(new URLSearchParams(tokenRequest.body).keys()),
+          })
+
+          try {
+            console.log("[DEBUG] Token Exchange - Sending request...")
+            const response = await fetch(provider.token.url!, tokenRequest)
+            const responseText = await response.text()
+
+            console.log("[DEBUG] Token Exchange - Response received:", {
+              status: response.status,
+              statusText: response.statusText,
+              headers: Object.fromEntries(response.headers),
+              body: responseText.substring(0, 100) + (responseText.length > 100 ? '...' : ''),
+            })
+
+            if (!response.ok) {
+              console.error("[ERROR] Token Exchange - Failed:", {
+                status: response.status,
+                statusText: response.statusText,
+                body: responseText,
+                headers: Object.fromEntries(response.headers),
+              })
+              throw new Error(
+                `Token exchange failed: ${response.status} ${response.statusText} - ${responseText}`
+              )
+            }
+
+            const tokens = JSON.parse(responseText)
+            console.log("[DEBUG] Token Exchange - Success:", {
+              hasAccessToken: !!tokens.access_token,
+              hasIdToken: !!tokens.id_token,
+              tokenType: tokens.token_type,
+              expiresIn: tokens.expires_in,
+            })
+
+            return { tokens }
+          } catch (error) {
+            console.error("[ERROR] Token Exchange - Request error:", error)
+            throw error
+          }
         },
       },
       userinfo: {
         request: async ({ tokens }) => {
-          // Skip userinfo request and use ID token
           if (!tokens.id_token) {
             throw new Error("No ID token available")
           }
@@ -90,55 +114,81 @@ export const config = {
         },
       },
       profile(profile: XSUAAProfile) {
-        console.log("[DEBUG] Processing profile:", {
-          sub: profile.sub,
-          hasEmail: !!profile.email,
-          hasUserName: !!profile.user_name,
-        })
-
         return {
           id: profile.sub,
-          name: profile.user_name || profile.email || profile.given_name || "Unknown User",
-          email: profile.email || "",
+          name: profile.user_name || "Unknown User",
+          email: null,
           emailVerified: null,
           roles: Array.isArray(profile.scope) ? profile.scope : [],
         }
       },
-      clientId: process.env.XSUAA_CLIENT_ID,
-      clientSecret: process.env.XSUAA_CLIENT_SECRET,
-      checks: ["state", "pkce"],
+      clientId: "sb-secure-app!t501469",
+      clientSecret: "7d1b1323-bb64-47d6-a0e9-4eda8d2a653b$Nqy7MV29Cp-n0ibGC6v67qMZGMQmJa9sLse05_0zxrQ=",
+      checks: ["state"],
       client: {
-        token_endpoint_auth_method: "client_secret_basic",
+        token_endpoint_auth_method: "client_secret_post",
+        response_types: ["code"],
+        grant_types: ["authorization_code"],
+      },
+      style: {
+        logo: "",
+        logoDark: "",
+        bg: "",
+        bgDark: "",
+        text: "",
+        textDark: "",
       },
     },
   ],
   callbacks: {
     async jwt({ token, account, profile }) {
-      console.log("[DEBUG] JWT Callback:", {
+      console.log("[DEBUG] JWT Callback - Input:", {
         hasToken: !!token,
         hasAccount: !!account,
         hasProfile: !!profile,
+        tokenKeys: token ? Object.keys(token) : [],
+        accountKeys: account ? Object.keys(account) : [],
+        profileKeys: profile ? Object.keys(profile) : [],
       })
 
       if (account) {
+        console.log("[DEBUG] JWT Callback - Updating token with account data")
         token.accessToken = account.access_token
         if (profile) {
+          console.log("[DEBUG] JWT Callback - Adding roles from profile")
           token.roles = Array.isArray(profile.scope) ? profile.scope : []
         }
       }
+
+      console.log("[DEBUG] JWT Callback - Final token:", {
+        hasAccessToken: !!token.accessToken,
+        hasRoles: Array.isArray(token.roles),
+        numberOfRoles: Array.isArray(token.roles) ? token.roles.length : 0,
+      })
+
       return token
     },
     async session({ session, token }) {
-      console.log("[DEBUG] Session Callback:", {
+      console.log("[DEBUG] Session Callback - Input:", {
         hasSession: !!session,
         hasToken: !!token,
+        sessionKeys: session ? Object.keys(session) : [],
+        tokenKeys: token ? Object.keys(token) : [],
       })
 
       if (token) {
         session.accessToken = token.accessToken as string
         session.user.roles = (token.roles as string[]) || []
         session.user.id = (token.sub as string) || "unknown"
+
+        console.log("[DEBUG] Session Callback - Updated session:", {
+          hasAccessToken: !!session.accessToken,
+          userId: session.user.id,
+          hasRoles: Array.isArray(session.user.roles),
+          numberOfRoles: session.user.roles.length,
+        })
       }
+
       return session
     },
   },
@@ -146,6 +196,6 @@ export const config = {
     signIn: "/sign-in",
   },
   debug: true,
-} satisfies NextAuthConfig
+} satisfies NextAuthConfig;
 
-export const { handlers, auth, signIn, signOut } = NextAuth(config)
+export const { handlers, auth, signIn, signOut } = NextAuth(config);

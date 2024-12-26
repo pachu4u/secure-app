@@ -11,29 +11,29 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { useAuth } from "@/contexts/auth-context"
-import { useRouter } from "next/navigation"
+import { signOut, useSession } from "next-auth/react"
 
 export function UserNav() {
-  const { user } = useAuth()
-  const router = useRouter()
+  const { data: session } = useSession()
 
-  if (!user) return null
+  if (!session?.user) return null
 
-  const handleLogout = async () => {
-    try {
-      const response = await fetch('/api/auth/logout', {
-        method: 'POST',
-        credentials: 'include',
-      })
-      
-      if (response.ok) {
-        router.push('/login')
-        router.refresh()
-      }
-    } catch (error) {
-      console.error('Logout failed:', error)
+  // Get initials from the username or email
+  const getInitials = () => {
+    if (session.user.name) {
+      return session.user.name
+        .split(' ')
+        .map(n => n[0])
+        .join('')
+        .toUpperCase()
     }
+    return session.user.email?.[0].toUpperCase() || '?'
+  }
+
+  // Get avatar URL using email for consistent image generation
+  const getAvatarUrl = () => {
+    const seed = session.user.email || session.user.name || 'default'
+    return `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(seed)}`
   }
 
   return (
@@ -42,11 +42,11 @@ export function UserNav() {
         <Button variant="ghost" className="relative h-8 w-8 rounded-full">
           <Avatar className="h-8 w-8">
             <AvatarImage 
-              src={`https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(user.given_name + ' ' + user.family_name)}`} 
-              alt={user.given_name} 
+              src={getAvatarUrl()}
+              alt={session.user.name || "User avatar"} 
             />
-            <AvatarFallback className="bg-primary/10">
-              {user.given_name[0]}{user.family_name[0]}
+            <AvatarFallback>
+              {getInitials()}
             </AvatarFallback>
           </Avatar>
         </Button>
@@ -54,31 +54,27 @@ export function UserNav() {
       <DropdownMenuContent className="w-56" align="end" forceMount>
         <DropdownMenuLabel className="font-normal">
           <div className="flex flex-col space-y-1">
-            <p className="text-sm font-medium leading-none">{user.given_name} {user.family_name}</p>
+            <p className="text-sm font-medium leading-none">
+              {session.user.name || "User"}
+            </p>
             <p className="text-xs leading-none text-muted-foreground">
-              {user.email}
+              {session.user.email}
             </p>
           </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
-          <DropdownMenuItem 
-            className="cursor-pointer"
-            onClick={() => router.push('/profile')}
-          >
+          <DropdownMenuItem>
             Profile
           </DropdownMenuItem>
-          <DropdownMenuItem 
-            className="cursor-pointer"
-            onClick={() => router.push('/settings')}
-          >
+          <DropdownMenuItem>
             Settings
           </DropdownMenuItem>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
-        <DropdownMenuItem 
-          className="cursor-pointer text-destructive focus:text-destructive"
-          onClick={handleLogout}
+        <DropdownMenuItem
+          className="text-red-600 cursor-pointer"
+          onClick={() => signOut({ callbackUrl: "/sign-in" })}
         >
           Log out
         </DropdownMenuItem>
