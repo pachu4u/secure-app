@@ -6,8 +6,15 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 export function getBaseUrl(requestUrl: string): string {
-  if (process.env.NODE_ENV === 'production') {
-    return process.env.NEXT_PUBLIC_PROD_URL || new URL(requestUrl).origin
+  try {
+    if (process.env.NODE_ENV === 'production') {
+      return process.env.NEXT_PUBLIC_PROD_URL || new URL(requestUrl).origin;
+    }
+    // For development, always use localhost:3001
+    return 'http://localhost:3001';
+  } catch (error) {
+    console.error('Error in getBaseUrl:', error);
+    // Fallback to request URL origin
+    return new URL(requestUrl).origin;
   }
-  return process.env.NEXT_PUBLIC_APP_URL || new URL(requestUrl).origin
 }

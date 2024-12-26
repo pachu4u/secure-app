@@ -16,18 +16,13 @@
     {
       "name": "Viewer",
       "description": "View access to application",
-      "scope-references": [
-        "$XSAPPNAME.User"
-      ],
+      "scope-references": ["$XSAPPNAME.User"],
       "attribute-references": []
     },
     {
       "name": "Administrator",
       "description": "Admin access to application",
-      "scope-references": [
-        "$XSAPPNAME.Admin",
-        "$XSAPPNAME.User"
-      ],
+      "scope-references": ["$XSAPPNAME.Admin", "$XSAPPNAME.User"],
       "attribute-references": []
     }
   ],
@@ -35,26 +30,20 @@
     {
       "name": "secure-app-viewer",
       "description": "View access to secure app",
-      "role-template-references": [
-        "$XSAPPNAME.Viewer"
-      ]
+      "role-template-references": ["$XSAPPNAME.Viewer"]
     },
     {
       "name": "secure-app-admin",
       "description": "Admin access to secure app",
-      "role-template-references": [
-        "$XSAPPNAME.Administrator"
-      ]
+      "role-template-references": ["$XSAPPNAME.Administrator"]
     }
   ],
   "oauth2-configuration": {
     "token-validity": 900,
     "redirect-uris": [
-      "https://secure-app.cfapps.eu10-004.hana.ondemand.com/login/callback",
-      "https://secure-app.cfapps.eu10-004.hana.ondemand.com/api/auth/callback",
-      "http://localhost:3000/login/callback",
-      "http://localhost:3000/api/auth/callback"
+      "*.cfapps.eu10-004.hana.ondemand.com/**",
+      "http://localhost:3001/**"
     ],
     "credential-types": ["binding-secret", "x509"]
   }
-} 
+}
